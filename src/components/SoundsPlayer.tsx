@@ -17,6 +17,79 @@ const sounds: Sound[] = [
   { id: 'birds', name: 'Kuşlar', emoji: '🐦' },
 ];
 
+// Ses oluşturma fonksiyonları
+const createAmbientSound = (type: string): string => {
+  const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+  const duration = 10; // 10 saniye örnek
+  const sampleRate = audioContext.sampleRate;
+  const samples = duration * sampleRate;
+  const audioBuffer = audioContext.createBuffer(1, samples, sampleRate);
+  const data = audioBuffer.getChannelData(0);
+
+  // Farklı ses türleri için farklı algoritma
+  if (type === 'rain') {
+    // Beyaz gürültü + düşük frekans
+    for (let i = 0; i < samples; i++) {
+      const noise = Math.random() * 2 - 1;
+      const envelope = Math.sin((i / samples) * Math.PI) * 0.8;
+      data[i] = noise * envelope * 0.3;
+    }
+  } else if (type === 'waves') {
+    // Dalga sesi - düşük frekans sinüs + gürültü
+    for (let i = 0; i < samples; i++) {
+      const wave = Math.sin((i / sampleRate) * Math.PI * 0.5) * 0.4;
+      const noise = Math.random() * 0.2 - 0.1;
+      const envelope = Math.sin((i / samples) * Math.PI) * 0.8;
+      data[i] = (wave + noise) * envelope * 0.4;
+    }
+  } else if (type === 'wind') {
+    // Rüzgar - yüksek frekans gürültü
+    for (let i = 0; i < samples; i++) {
+      const noise = Math.random() * 2 - 1;
+      const envelope = Math.sin((i / samples) * Math.PI) * 0.8;
+      const filter = Math.sin((i / sampleRate) * Math.PI * 3) * 0.3;
+      data[i] = (noise + filter) * envelope * 0.25;
+    }
+  } else if (type === 'forest') {
+    // Kuş sesleri - yüksek frekans, değişken
+    for (let i = 0; i < samples; i++) {
+      const chirp = Math.sin((i / sampleRate) * Math.PI * 6) * 0.3;
+      const noise = Math.random() * 0.15 - 0.075;
+      const envelope = Math.sin((i / samples) * Math.PI) * 0.8;
+      data[i] = (chirp + noise) * envelope * 0.3;
+    }
+  } else if (type === 'birds') {
+    // Kuş cıvıltıları - yüksek ve değişken frekans
+    for (let i = 0; i < samples; i++) {
+      const freq = 4000 + Math.sin((i / sampleRate) * Math.PI * 2) * 2000;
+      const chirp = Math.sin((i / sampleRate) * freq * Math.PI * 0.0001) * 0.4;
+      const envelope = Math.sin((i / samples) * Math.PI) * 0.8;
+      data[i] = chirp * envelope * 0.25;
+    }
+  } else if (type === 'cafe') {
+    // Kafe gürültüsü - orta frekans gürültü + periyodik sesler
+    for (let i = 0; i < samples; i++) {
+      const noise = Math.random() * 2 - 1;
+      const chatter = Math.sin((i / sampleRate) * Math.PI * 1.5) * 0.2;
+      const envelope = Math.sin((i / samples) * Math.PI) * 0.8;
+      data[i] = (noise * 0.5 + chatter) * envelope * 0.3;
+    }
+  } else if (type === 'fire') {
+    // Ateş sesi - periyodik patlamalar + gürültü
+    for (let i = 0; i < samples; i++) {
+      const noise = Math.random() * 2 - 1;
+      const crackling = Math.sin((i / sampleRate) * Math.PI * 2) * 0.4;
+      const burst = Math.sin((i / samples) * Math.PI * 8) * 0.5;
+      const envelope = Math.sin((i / samples) * Math.PI) * 0.8;
+      data[i] = (noise * 0.4 + crackling + burst) * envelope * 0.3;
+    }
+  }
+
+  return URL.createObjectURL(
+    new Blob([audioBuffer.getChannelData(0)], { type: 'audio/wav' })
+  );
+};
+
 export function SoundsPlayer() {
   const [activeSounds, setActiveSounds] = useState<Set<string>>(new Set());
   const [masterVolume, setMasterVolume] = useState(0.5);
@@ -24,8 +97,16 @@ export function SoundsPlayer() {
   const audioRefsRef = useRef<Map<string, HTMLAudioElement>>(new Map());
 
   const toggleSound = (soundId: string) => {
-    const audio = audioRefsRef.current.get(soundId);
-    if (!audio) return;
+    let audio = audioRefsRef.current.get(soundId);
+
+    if (!audio) {
+      audio = new Audio();
+      // WAV dosyasını kullan
+      audio.src = `/sounds/${soundId}.wav`;
+      audio.crossOrigin = 'anonymous';
+      audio.preload = 'auto';
+      audioRefsRef.current.set(soundId, audio);
+    }
 
     const isActive = activeSounds.has(soundId);
 
@@ -40,7 +121,9 @@ export function SoundsPlayer() {
     } else {
       audio.loop = true;
       audio.volume = isMuted ? 0 : masterVolume;
-      audio.play().catch((err) => console.error(`Error playing ${soundId}:`, err));
+      audio.play().catch((err) => {
+        console.error(`Ses çalınamadı (${soundId}):`, err);
+      });
       setActiveSounds((prev) => new Set(prev).add(soundId));
     }
   };
@@ -144,18 +227,6 @@ export function SoundsPlayer() {
             </span>
           </div>
         )}
-
-        {/* Audio Elements */}
-        {sounds.map((sound) => (
-          <audio
-            key={sound.id}
-            ref={(el) => {
-              if (el) audioRefsRef.current.set(sound.id, el);
-            }}
-            src={`/sounds/${sound.id}.mp3`}
-            crossOrigin="anonymous"
-          />
-        ))}
       </div>
     </div>
   );

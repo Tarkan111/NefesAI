@@ -95,16 +95,36 @@ export function MeditationGuide({ onBack }: MeditationGuideProps) {
     }
 
     setTimeRemaining(step.duration);
-    speakText(step.text);
 
+    // Sesin bitişini bekle, sonra sıradaki adıma geç
+    if (voiceEnabled && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(step.text);
+      utterance.lang = 'tr-TR';
+      utterance.rate = 0.7;
+      utterance.pitch = 0.9;
+      utterance.volume = 0.85;
+
+      const voices = window.speechSynthesis.getVoices();
+      const turkishVoice = voices.find(v => v.lang.startsWith('tr'));
+      if (turkishVoice) utterance.voice = turkishVoice;
+
+      const stepDuration = step.duration * 1000;
+      utterance.onend = () => {
+        // Ses bitişinden sonra geri sayıma başla
+      };
+
+      window.speechSynthesis.speak(utterance);
+    }
+
+    let elapsed = 0;
     intervalRef.current = window.setInterval(() => {
-      setTimeRemaining((prev) => {
-        if (prev <= 1) {
-          nextStep();
-          return 0;
-        }
-        return prev - 1;
-      });
+      elapsed += 1;
+      setTimeRemaining(Math.max(0, step.duration - elapsed));
+
+      if (elapsed >= step.duration) {
+        nextStep();
+      }
 
       setTotalProgress((prev) => {
         return Math.min(prev + 1, selectedMeditation.duration);
@@ -119,18 +139,26 @@ export function MeditationGuide({ onBack }: MeditationGuideProps) {
   }, [isActive, currentStep]);
 
   const speakText = (text: string) => {
-    if (!voiceEnabled) return;
+    if (!voiceEnabled || !('speechSynthesis' in window)) return;
 
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = 'tr-TR';
-      utterance.rate = 0.8;
-      utterance.pitch = 1;
-      utterance.volume = 0.9;
-      speechRef.current = utterance;
-      window.speechSynthesis.speak(utterance);
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'tr-TR';
+    utterance.rate = 0.65; // Çok yavaş ve rahatlama
+    utterance.pitch = 0.85; // Daha düşük, huzurlu ton
+    utterance.volume = 1.0;
+
+    // Türkçe ses bul
+    const voices = window.speechSynthesis.getVoices();
+    const turkishVoice = voices.find(v =>
+      v.lang.startsWith('tr') || v.name.includes('Turkish')
+    );
+    if (turkishVoice) {
+      utterance.voice = turkishVoice;
     }
+
+    speechRef.current = utterance;
+    window.speechSynthesis.speak(utterance);
   };
 
   const nextStep = () => {
